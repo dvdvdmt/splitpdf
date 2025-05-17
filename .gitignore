@@ -4,11 +4,6 @@ npm-debug.log
 yarn-debug.log
 yarn-error.log
 
-# Rust
-rust_pdf_splitter/target/
-rust_pdf_splitter/Cargo.lock
-**/*.rs.bk
-
 # Build output
 bin/
 fixed/

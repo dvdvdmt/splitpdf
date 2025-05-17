@@ -5,8 +5,7 @@ This directory contains end-to-end tests for the PDF Splitter CLI using Node's b
 ## Test Components
 
 1. **Test PDF Generation**: `generate-test-pdf.js` creates a 20-page test PDF using PDFKit.
-2. **Mock Rust Binary**: For testing purposes, we've created a mock implementation of the Rust binary in `bin/rust_pdf_splitter`.
-3. **CLI Tests**: Tests in `cli.test.js` verify the Node.js CLI interface.
+2. **CLI Tests**: Tests in `cli.test.js` verify the Node.js CLI interface.
 
 ## Test Setup
 
@@ -48,6 +47,7 @@ The tests cover:
 2. **PDF Splitting**:
    - Verify files are created with correct names
    - Verify proper page distribution
+   - Verify correct page counts
 
 3. **Dry Run Mode**:
    - Verify JSON output
@@ -62,5 +62,4 @@ Test output files are created in the `temp/` directory and are automatically cle
 When adding new tests:
 
 1. Add test cases to `cli.test.js`
-2. If needed, update the test PDF generator in `generate-test-pdf.js`
-3. If testing new Rust binary functionality, update the mock in `bin/rust_pdf_splitter` 
+2. If needed, update the test PDF generator in `generate-test-pdf.js` 
