@@ -76,17 +76,50 @@ pub fn calculate_ranges(total_pages: usize, parts: usize, intro_range: Option<(u
 
 pub fn get_pdf_page_count(file_path: &str) -> Result<usize, String> {
     // Initialize PDFium
-    let bindings = match Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path("./pdfium/"))
-        .or_else(|_| Pdfium::bind_to_system_library()) {
+    let exe_dir = std::env::current_exe()
+        .map_err(|e| format!("Failed to get executable path: {}", e))?
+        .parent()
+        .ok_or_else(|| "Unable to determine executable directory".to_string())?
+        .to_path_buf();
+    
+    let pdfium_paths = [
+        // Check relative to executable
+        exe_dir.join("pdfium"),
+        // Check relative to current directory
+        PathBuf::from("./pdfium"),
+        // Check in parent directory
+        PathBuf::from("../pdfium"),
+    ];
+    
+    // Try binding to PDFium at various possible locations
+    let mut bindings = None;
+    for path in &pdfium_paths {
+        if path.exists() {
+            let lib_path = Pdfium::pdfium_platform_library_name_at_path(path.to_string_lossy().as_ref());
+            match Pdfium::bind_to_library(lib_path) {
+                Ok(binding) => {
+                    bindings = Some(binding);
+                    break;
+                }
+                Err(_) => continue,
+            }
+        }
+    }
+    
+    // Fall back to system library if no local library was found
+    let bindings = match bindings {
+        Some(binding) => binding,
+        None => match Pdfium::bind_to_system_library() {
             Ok(binding) => binding,
-            Err(e) => return Err(e.to_string()),
-        };
+            Err(e) => return Err(format!("Failed to bind to PDFium library: {}", e)),
+        },
+    };
     
     let pdfium = Pdfium::new(bindings);
     
     let document = match pdfium.load_pdf_from_file(file_path, None) {
         Ok(doc) => doc,
-        Err(e) => return Err(e.to_string()),
+        Err(e) => return Err(format!("Failed to load PDF: {}", e)),
     };
     
     Ok(document.pages().len() as usize)
@@ -98,23 +131,59 @@ pub fn process_pdf(args: &SplitArgs) -> Result<SplitResult, String> {
         return Err(format!("File not found at {}", args.file_path));
     }
     
-    // Initialize PDFium
-    let bindings = match Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path("./pdfium/"))
-        .or_else(|_| Pdfium::bind_to_system_library()) {
+    // Resolve PDFium library path - first check for library in the executable directory
+    let exe_dir = std::env::current_exe()
+        .map_err(|e| format!("Failed to get executable path: {}", e))?
+        .parent()
+        .ok_or_else(|| "Unable to determine executable directory".to_string())?
+        .to_path_buf();
+    
+    let pdfium_paths = [
+        // Check relative to executable
+        exe_dir.join("pdfium"),
+        // Check relative to current directory
+        PathBuf::from("./pdfium"),
+        // Check in parent directory
+        PathBuf::from("../pdfium"),
+    ];
+    
+    // Try binding to PDFium at various possible locations
+    let mut bindings = None;
+    for path in &pdfium_paths {
+        if path.exists() {
+            let lib_path = Pdfium::pdfium_platform_library_name_at_path(path.to_string_lossy().as_ref());
+            match Pdfium::bind_to_library(lib_path) {
+                Ok(binding) => {
+                    bindings = Some(binding);
+                    break;
+                }
+                Err(_) => continue,
+            }
+        }
+    }
+    
+    // Fall back to system library if no local library was found
+    let bindings = match bindings {
+        Some(binding) => binding,
+        None => match Pdfium::bind_to_system_library() {
             Ok(binding) => binding,
-            Err(e) => return Err(e.to_string()),
-        };
+            Err(e) => return Err(format!("Failed to bind to PDFium library: {}", e)),
+        },
+    };
     
     let pdfium = Pdfium::new(bindings);
     
-    // Load the document
-    let document = match pdfium.load_pdf_from_file(&args.file_path, None) {
+    // Load the source document
+    let source_document = match pdfium.load_pdf_from_file(&args.file_path, None) {
         Ok(doc) => doc,
-        Err(e) => return Err(e.to_string()),
+        Err(e) => return Err(format!("Failed to load source PDF: {}", e)),
     };
     
     // Get total pages
-    let total_pages = document.pages().len() as usize;
+    let total_pages = source_document.pages().len() as usize;
+    if total_pages == 0 {
+        return Err("Source PDF has no pages".to_string());
+    }
     
     // Validate intro range if provided
     if let Some((start, end)) = args.intro_range {
@@ -146,37 +215,52 @@ pub fn process_pdf(args: &SplitArgs) -> Result<SplitResult, String> {
     // Process each part
     for range in &result.ranges {
         // Create a new document for this part
-        let mut output_document = match pdfium.create_new_pdf() {
-            Ok(doc) => doc,
-            Err(e) => return Err(e.to_string()),
-        };
+        let mut output_doc = pdfium.create_new_pdf().map_err(|e| e.to_string())?;
+        
+        // For each part, we'll copy pages one by one
+        let mut pages_processed = 0;
         
         // Add intro pages if required
         if range.with_intro {
-            let intro_start = range.intro_start_page.unwrap() - 1; // Convert to 0-based
-            let intro_end = range.intro_end_page.unwrap() - 1;
-            
-            for page_index in intro_start..=intro_end {
-                let source_page = match document.pages().get(page_index as PdfPageIndex) {
-                    Ok(page) => page,
-                    Err(e) => return Err(e.to_string()),
+            for i in range.intro_start_page.unwrap()..=range.intro_end_page.unwrap() {
+                // Convert to 0-based index
+                let source_page_index = i - 1;
+                
+                // Verify the source page exists (without storing the result)
+                source_document.pages().get(source_page_index as u16)
+                    .map_err(|e| format!("Failed to get intro page {}: {}", i, e))?;
+                
+                // Get the current page count before copying
+                let current_page_count = output_doc.pages().len();
+                
+                // Copy the page to the output document
+                match output_doc.pages_mut().copy_page_from_document(
+                    &source_document,
+                    source_page_index as u16,
+                    current_page_count
+                ) {
+                    Ok(_) => (),
+                    Err(e) => return Err(format!("Failed to copy intro page {}: {}", i, e)),
                 };
                 
-                // Get the dimensions of the source page
-                let width = source_page.width();
-                let height = source_page.height();
-                
-                // Create a new page in the output document with the same dimensions
-                if let Err(e) = output_document.pages_mut().create_page_at_end(PdfPagePaperSize::Custom(width, height)) {
-                    return Err(format!("Failed to create page: {}", e));
+                // Verify the page was copied correctly
+                if output_doc.pages().len() != (pages_processed + 1) as u16 {
+                    return Err(format!("Failed to verify page copy for intro page {}", i));
                 }
+                
+                pages_processed += 1;
                 
                 if args.verbose {
                     println!(
                         "{}",
                         serde_json::to_string(&Event::Progress {
-                            page: page_index + 1,
-                            total: total_pages,
+                            page: pages_processed,
+                            total: if range.with_intro {
+                                (range.end_page - range.start_page + 1) + 
+                                (range.intro_end_page.unwrap() - range.intro_start_page.unwrap() + 1)
+                            } else {
+                                range.end_page - range.start_page + 1
+                            },
                         }).unwrap()
                     );
                 }
@@ -184,44 +268,65 @@ pub fn process_pdf(args: &SplitArgs) -> Result<SplitResult, String> {
         }
         
         // Add content pages
-        let content_start = range.start_page - 1; // Convert to 0-based
-        let content_end = range.end_page - 1;
-        
-        for page_index in content_start..=content_end {
-            let source_page = match document.pages().get(page_index as PdfPageIndex) {
-                Ok(page) => page,
-                Err(e) => return Err(e.to_string()),
+        for i in range.start_page..=range.end_page {
+            // Convert to 0-based index
+            let source_page_index = i - 1;
+            
+            // Verify the source page exists (without storing the result)
+            source_document.pages().get(source_page_index as u16)
+                .map_err(|e| format!("Failed to get content page {}: {}", i, e))?;
+            
+            // Get the current page count before copying
+            let current_page_count = output_doc.pages().len();
+            
+            // Copy the page to the output document
+            match output_doc.pages_mut().copy_page_from_document(
+                &source_document,
+                source_page_index as u16,
+                current_page_count
+            ) {
+                Ok(_) => (),
+                Err(e) => return Err(format!("Failed to copy content page {}: {}", i, e)),
             };
             
-            // Get the dimensions of the source page
-            let width = source_page.width();
-            let height = source_page.height();
-            
-            // Create a new page in the output document with the same dimensions
-            if let Err(e) = output_document.pages_mut().create_page_at_end(PdfPagePaperSize::Custom(width, height)) {
-                return Err(format!("Failed to create page: {}", e));
+            // Verify the page was copied correctly
+            if output_doc.pages().len() != (pages_processed + 1) as u16 {
+                return Err(format!("Failed to verify page copy for content page {}", i));
             }
+            
+            pages_processed += 1;
             
             if args.verbose {
                 println!(
                     "{}",
                     serde_json::to_string(&Event::Progress {
-                        page: page_index + 1,
-                        total: total_pages,
+                        page: pages_processed,
+                        total: if range.with_intro {
+                            (range.end_page - range.start_page + 1) + 
+                            (range.intro_end_page.unwrap() - range.intro_start_page.unwrap() + 1)
+                        } else {
+                            range.end_page - range.start_page + 1
+                        },
                     }).unwrap()
                 );
             }
         }
         
-        // Save the output
+        // Create the output file path
         let output_filename = format!("{}_part{}.pdf", output_basename, range.part_index);
         let output_path = PathBuf::from(output_dir).join(output_filename);
         let output_path_str = output_path.to_string_lossy().to_string();
         
         // Save the document
-        match output_document.save_to_file(&output_path) {
-            Ok(_) => {},
-            Err(e) => return Err(format!("Failed to save PDF: {}", e)),
+        output_doc.save_to_file(&output_path_str)
+            .map_err(|e| format!("Failed to save output file: {}", e))?;
+        
+        // Verify the output file exists and has a non-zero size
+        let metadata = std::fs::metadata(&output_path)
+            .map_err(|e| format!("Failed to verify output file {}: {}", output_path_str, e))?;
+        
+        if metadata.len() == 0 {
+            return Err(format!("Output file {} has zero size", output_path_str));
         }
         
         if args.verbose {

@@ -3,7 +3,7 @@
 const { Command } = require('commander');
 const path = require('path');
 const fs = require('fs');
-const { spawn } = require('child_process'); // Uncommented
+const { splitPdf } = require('./index');
 
 const program = new Command();
 
@@ -19,7 +19,7 @@ program
   .option('--dry-run', 'Print calculated page ranges as JSON and exit without writing files')
   .option('--verbose', 'Enable verbose logging (progress as JSON lines)')
   .option('--output-dir <path>', 'Directory to output split PDF files (defaults to source file directory)')
-  .option('--output-basename <name>', 'Base name for output files (defaults to source file name without extension)');
+  .option('--output-basename <n>', 'Base name for output files (defaults to source file name without extension)');
 
 program.parse(process.argv);
 
@@ -72,119 +72,60 @@ function validateOptions(options) {
 
 validateOptions(options);
 
-console.log('Parsed options:', options);
+// Prepare options for the splitPdf function
+const splitterOptions = {
+  filePath: path.resolve(options.file),
+  parts: options.parts,
+  intro: options.introParsed,
+  outputDir: options.outputDir,
+  outputBasename: options.outputBasename,
+  dryRun: !!options.dryRun,
+  progressCallback: options.verbose ? (progress) => {
+    console.log(JSON.stringify(progress));
+  } : null
+};
 
-// Determine the path to the Rust binary
-// Assuming it's in a 'bin' directory at the root of the project
-const rustBinaryPath = path.join(__dirname, '..', 'bin', 'rust_pdf_splitter'); 
-// For development, you might point directly to target/release or target/debug
-// const rustBinaryPath = path.join(__dirname, '..', 'rust_pdf_splitter', 'target', 'release', 'rust_pdf_splitter');
-
-if (options.dryRun) {
-  console.log('Executing dry run via Rust binary...');
-  const rustArgs = [
-    '--file-path', path.resolve(options.file),
-    '--parts', options.parts.toString(),
-    '--output-basename', options.outputBasename,
-    '--output-dir', options.outputDir,
-    '--dry-run',
-  ];
-  if (options.introParsed) {
-    rustArgs.push('--intro-start', options.introParsed.start.toString());
-    rustArgs.push('--intro-end', options.introParsed.end.toString());
-  }
-  if (options.verbose) {
-    rustArgs.push('--verbose');
-  }
-
-  const dryRunProcess = spawn(rustBinaryPath, rustArgs);
-
-  let dryRunOutput = '';
-  dryRunProcess.stdout.on('data', (data) => {
-    dryRunOutput += data.toString();
-  });
-
-  dryRunProcess.stderr.on('data', (data) => {
-    console.error(`Dry Run Rust Error: ${data}`);
-  });
-
-  dryRunProcess.on('close', (code) => {
-    if (code === 0) {
-      try {
-        // Assuming dry-run from Rust prints JSON to stdout
-        const parsedOutput = JSON.parse(dryRunOutput);
-        console.log(JSON.stringify(parsedOutput, null, 2));
-      } catch (e) {
-        console.error('Failed to parse dry run JSON output from Rust:', e);
-        console.log('Raw output:', dryRunOutput);
-      }
+// Execute PDF splitting
+async function run() {
+  try {
+    const result = await splitPdf(splitterOptions);
+    
+    if (options.dryRun) {
+      // Format and print the calculated page ranges
+      console.log(JSON.stringify({
+        parts: result
+      }, null, 2));
+    } else if (options.verbose) {
+      // Final summary in verbose mode
+      console.log(JSON.stringify({
+        event: 'complete',
+        parts: result.length,
+        outputFiles: result.map(part => part.outputPath)
+      }));
     } else {
-      console.error(`Dry run Rust process exited with code ${code}`);
-    }
-    process.exit(code === null ? 1 : code);
-  });
-
-} else {
-  console.log('Proceeding with PDF splitting via Rust binary...');
-  const rustArgs = [
-    '--file-path', path.resolve(options.file),
-    '--parts', options.parts.toString(),
-    '--output-basename', options.outputBasename,
-    '--output-dir', options.outputDir,
-  ];
-
-  if (options.introParsed) {
-    rustArgs.push('--intro-start', options.introParsed.start.toString());
-    rustArgs.push('--intro-end', options.introParsed.end.toString());
-  }
-  if (options.verbose) {
-    rustArgs.push('--verbose');
-  }
-
-  console.log(`Spawning Rust binary: ${rustBinaryPath} with args:`, rustArgs.join(' '));
-
-  const rustProcess = spawn(rustBinaryPath, rustArgs);
-
-  rustProcess.stdout.on('data', (data) => {
-    // Assuming verbose output from Rust is JSON lines
-    const rawLines = data.toString().split('\n');
-    const lines = [];
-    for (const line of rawLines) {
-      if (line.trim() !== '') {
-        lines.push(line);
-      }
+      // Simple completion message in non-verbose mode
+      console.log(`Successfully split PDF into ${result.length} parts.`);
+      console.log('Output files:');
+      result.forEach(part => {
+        console.log(`  ${part.outputPath}`);
+      });
     }
     
-    for (const line of lines) {
-      try {
-        const event = JSON.parse(line);
-        // You could handle different event types here, e.g. progress, partComplete
-        if (options.verbose) {
-            console.log('Rust Event:', event);
-        } else if (event.event === 'Error') {
-            console.error('Rust Error:', event.message);
-        }
-      } catch (e) {
-        if (options.verbose) { // Print non-JSON lines if verbose
-            console.log('Rust STDOUT:', line);
-        }
-      }
-    }
-  });
+    process.exit(0);
+  } catch (error) {
+    // Handle errors with specific exit codes
+    console.error(`Error: ${error.message}`);
+    
+    // Use the error code if available, or determine code based on error message
+    const exitCode = error.code || (() => {
+      if (error.message.includes('I/O error')) return 3;
+      if (error.message.includes('PDF error')) return 4;
+      if (error.message.includes('encrypted')) return 5;
+      return 1; // Default unknown error
+    })();
+    
+    process.exit(exitCode);
+  }
+}
 
-  rustProcess.stderr.on('data', (data) => {
-    console.error(`Rust STDERR: ${data}`);
-  });
-
-  rustProcess.on('close', (code) => {
-    console.log(`Rust process exited with code ${code}.`);
-    // Translate Rust exit codes to CLI exit codes if necessary, or just pass through
-    // See Section 5 of spec/project.md
-    // For now, a simple pass-through if non-zero, or specific mapping if needed
-    if (code !== 0) {
-        // Potentially map code to spec codes 2, 3, 4, 5 here
-        console.error(`PDF splitting failed. Rust process exited with code ${code}.`);
-    }
-    process.exit(code === null ? 1 : code); // Exit with Rust's code, or 1 if null
-  });
-} 
+run(); 

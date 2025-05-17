@@ -10,7 +10,7 @@ const PDFDocument = require('pdfkit');
 
 const OUTPUT_PATH = path.join(__dirname, 'fixtures/test.pdf');
 
-// Create a document with 20 pages
+// Create a document with 50 pages
 function createTestPDF() {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument();
@@ -18,8 +18,8 @@ function createTestPDF() {
     
     doc.pipe(writeStream);
     
-    // Create 20 pages
-    for (let i = 1; i <= 20; i++) {
+    // Create 50 pages
+    for (let i = 1; i <= 50; i++) {
       doc.fontSize(40).text(`Page ${i}`, 100, 100);
       
       // Add some content to make the page visually distinct
@@ -31,7 +31,7 @@ function createTestPDF() {
          .stroke();
       doc.fontSize(24).text(`PDF SPLITTER TEST`, 150, 290);
       
-      if (i < 20) {
+      if (i < 50) {
         doc.addPage();
       }
     }
@@ -39,7 +39,7 @@ function createTestPDF() {
     doc.end();
     
     writeStream.on('finish', () => {
-      console.log(`Created test PDF with 20 pages at ${OUTPUT_PATH}`);
+      console.log(`Created test PDF with 50 pages at ${OUTPUT_PATH}`);
       resolve();
     });
     

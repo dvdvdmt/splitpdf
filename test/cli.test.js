@@ -1,9 +1,10 @@
-const { describe, it, before, after } = require('node:test');
+const { describe, it, before, afterEach } = require('node:test');
 const assert = require('node:assert');
 const path = require('node:path');
 const fs = require('node:fs');
 const { spawn } = require('node:child_process');
 const { promisify } = require('node:util');
+const { PDFDocument } = require('pdf-lib');
 
 const CLI_PATH = path.join(__dirname, '../src/cli.js');
 const TEST_PDF_PATH = path.join(__dirname, 'fixtures/test.pdf');
@@ -47,6 +48,17 @@ async function fileExists(filePath) {
   }
 }
 
+// Get page count of a PDF file
+async function getPdfPageCount(filePath) {
+  try {
+    const fileData = await fs.promises.readFile(filePath);
+    const pdfDoc = await PDFDocument.load(fileData);
+    return pdfDoc.getPageCount();
+  } catch (error) {
+    throw new Error(`Error checking page count for ${path.basename(filePath)}: ${error.message}`);
+  }
+}
+
 describe('PDF Splitter CLI', () => {
   before(async () => {
     // Create test output directory
@@ -58,7 +70,7 @@ describe('PDF Splitter CLI', () => {
     }
   });
   
-  after(async () => {
+  afterEach(async () => {
     // Clean up test output files
     try {
       const files = await fs.promises.readdir(TEST_OUTPUT_DIR);
@@ -116,11 +128,8 @@ describe('PDF Splitter CLI', () => {
       '--verbose'
     ]);
     
-    console.log('STDOUT:', stdout);
     if (stderr) console.error('STDERR:', stderr);
 
-
-    
     assert.strictEqual(code, 0, `CLI exits with code 0, but got ${code}. Stderr: ${stderr}`);
     
     // Check if output files exist with expected names
@@ -129,6 +138,24 @@ describe('PDF Splitter CLI', () => {
     
     assert.ok(await fileExists(outputPath1), `Output file ${outputPath1} exists`);
     assert.ok(await fileExists(outputPath2), `Output file ${outputPath2} exists`);
+    
+    // Verify page counts in output files
+    const sourcePdfPageCount = await getPdfPageCount(TEST_PDF_PATH);
+    const part1PageCount = await getPdfPageCount(outputPath1);
+    const part2PageCount = await getPdfPageCount(outputPath2);
+    
+    // Assert that the sum of page counts in parts equals source page count
+    assert.strictEqual(
+      part1PageCount + part2PageCount, 
+      sourcePdfPageCount, 
+      `Sum of part page counts (${part1PageCount} + ${part2PageCount}) should equal source page count (${sourcePdfPageCount})`
+    );
+    
+    // Assert that parts have roughly the same number of pages (diff <= 1)
+    assert.ok(
+      Math.abs(part1PageCount - part2PageCount) <= 1,
+      `Part page counts should be roughly equal: ${part1PageCount} vs ${part2PageCount}`
+    );
   });
   
   it('runs in dry-run mode without creating files', async function() {
@@ -179,17 +206,19 @@ describe('PDF Splitter CLI', () => {
     
     const outputDir = TEST_OUTPUT_DIR;
     const outputBasename = 'test_with_intro';
+    const introStart = 1;
+    const introEnd = 5;
+    const introPageCount = introEnd - introStart + 1;
     
     const { code, stdout, stderr } = await runCLI([
       '--file', TEST_PDF_PATH,
       '--parts', '3',
-      '--intro', '1:5',  // First 5 pages as intro
+      '--intro', `${introStart}:${introEnd}`,
       '--output-dir', outputDir,
       '--output-basename', outputBasename,
       '--verbose'
     ]);
     
-    console.log('STDOUT:', stdout);
     if (stderr) console.error('STDERR:', stderr);
     
     assert.strictEqual(code, 0, `CLI exits with code 0, but got ${code}. Stderr: ${stderr}`);
@@ -209,6 +238,48 @@ describe('PDF Splitter CLI', () => {
       stdout.includes('withIntro') || 
       stdout.includes('--intro-start'),
       'Output mentions intro pages'
+    );
+    
+    // Get page counts
+    const sourcePdfPageCount = await getPdfPageCount(TEST_PDF_PATH);
+    const part1PageCount = await getPdfPageCount(outputPath1);
+    const part2PageCount = await getPdfPageCount(outputPath2);
+    const part3PageCount = await getPdfPageCount(outputPath3);
+    
+    // Each part should have intro pages + content pages
+    // Verify each part has the intro pages included
+    assert.ok(
+      part1PageCount > introPageCount,
+      `Part 1 should include intro pages (${introPageCount}) plus content pages. Got ${part1PageCount} total pages.`
+    );
+    assert.ok(
+      part2PageCount > introPageCount,
+      `Part 2 should include intro pages (${introPageCount}) plus content pages. Got ${part2PageCount} total pages.`
+    );
+    assert.ok(
+      part3PageCount > introPageCount,
+      `Part 3 should include intro pages (${introPageCount}) plus content pages. Got ${part3PageCount} total pages.`
+    );
+    
+    // Sum should equal source page count + (intro pages count * (parts - 1))
+    // This is because intro pages are repeated in each part
+    const expectedTotalPages = sourcePdfPageCount + (introPageCount * (3 - 1));
+    assert.strictEqual(
+      part1PageCount + part2PageCount + part3PageCount,
+      expectedTotalPages,
+      `Sum of part page counts should be source pages (${sourcePdfPageCount}) + intro pages (${introPageCount}) * (parts-1). ` +
+      `Got ${part1PageCount} + ${part2PageCount} + ${part3PageCount} = ${part1PageCount + part2PageCount + part3PageCount}`
+    );
+    
+    // Non-intro content should be roughly evenly distributed
+    const part1ContentPages = part1PageCount - introPageCount;
+    const part2ContentPages = part2PageCount - introPageCount;
+    const part3ContentPages = part3PageCount - introPageCount;
+    
+    assert.ok(
+      Math.max(part1ContentPages, part2ContentPages, part3ContentPages) - 
+      Math.min(part1ContentPages, part2ContentPages, part3ContentPages) <= 1,
+      `Content pages should be evenly distributed: ${part1ContentPages}, ${part2ContentPages}, ${part3ContentPages}`
     );
   });
 }); 
