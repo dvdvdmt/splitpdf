@@ -8,9 +8,8 @@ const { splitPdf } = require('./index');
 const program = new Command();
 
 program
-  .name('quickpdfsplit')
-  .description('Splits a PDF into multiple parts, optionally prepending an intro range.')
-  .version('0.1.0');
+  .name('splitpdf')
+  .description('Splits a PDF into multiple parts, optionally prepending an intro range.');
 
 program
   .requiredOption('-f, --file <path>', 'Path to the source PDF file')

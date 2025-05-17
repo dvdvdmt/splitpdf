@@ -4,7 +4,7 @@
   "description": "A command-line utility for splitting PDF documents.",
   "main": "src/index.js",
   "bin": {
-    "quickpdfsplit": "./src/cli.js"
+    "splitpdf": "./src/cli.js"
   },
   "scripts": {
     "start": "node src/cli.js",
