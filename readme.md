@@ -11,6 +11,8 @@ A command-line utility for fast, personal splitting of large PDF documents into 
 
 ## Installation
 
+### Local Installation
+
 ```bash
 # Clone the repository
 git clone https://github.com/your-username/pdf-splitter.git
@@ -19,8 +21,18 @@ cd pdf-splitter
 # Install dependencies
 npm install
 
-# Build the Rust binary
-npm run build:rust
+# Run locally
+npm start -- --file ./source.pdf --parts 3
+```
+
+### Global Installation
+
+```bash
+# Install globally from the project directory
+npm install -g .
+
+# Now you can use the 'splitpdf' command from anywhere
+splitpdf --file ./source.pdf --parts 3
 ```
 
 ## Usage
@@ -37,7 +49,7 @@ splitpdf --file ./source.pdf --parts 3 [--intro 1:10] [--dry-run] [--verbose]
 - `--dry-run`: Print calculated page ranges as JSON and exit without writing files
 - `--verbose`: Enable verbose logging (progress as JSON lines)
 - `--output-dir <path>`: Directory to output split PDF files (defaults to source file directory)
-- `--output-basename <name>`: Base name for output files (defaults to source file name without extension)
+- `--output-basename <n>`: Base name for output files (defaults to source file name without extension)
 
 ### Examples
 
@@ -72,10 +84,7 @@ npm run test:setup
 
 ### Architecture
 
-The project consists of:
-
-1. **Node.js CLI Interface**: Handles argument parsing and validation
-2. **Rust Core Processing**: Performs the actual PDF splitting
+The project consists of a Node.js application that uses the pdf-lib library for PDF manipulation.
 
 ## Exit Codes
 
