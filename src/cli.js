@@ -37,8 +37,21 @@ function validateOptions(options) {
   }
 
   if (options.intro) {
-    const introRange = options.intro.split(':').map(Number);
-    if (introRange.length !== 2 || introRange.some(isNaN) || introRange[0] < 1 || introRange[1] < introRange[0]) {
+    const introRangeParts = options.intro.split(':');
+    const introRange = [];
+    for (const part of introRangeParts) {
+      introRange.push(Number(part));
+    }
+    
+    let hasInvalidNumber = false;
+    for (const num of introRange) {
+      if (isNaN(num)) {
+        hasInvalidNumber = true;
+        break;
+      }
+    }
+    
+    if (introRange.length !== 2 || hasInvalidNumber || introRange[0] < 1 || introRange[1] < introRange[0]) {
       console.error('Error: Invalid intro range. Must be in format start:end, e.g., 1:10, with start >= 1 and end >= start.');
       process.exit(2); // Exit code 2 for invalid CLI arguments
     }
@@ -134,8 +147,15 @@ if (options.dryRun) {
 
   rustProcess.stdout.on('data', (data) => {
     // Assuming verbose output from Rust is JSON lines
-    const lines = data.toString().split('\n').filter(line => line.trim() !== '');
-    lines.forEach(line => {
+    const rawLines = data.toString().split('\n');
+    const lines = [];
+    for (const line of rawLines) {
+      if (line.trim() !== '') {
+        lines.push(line);
+      }
+    }
+    
+    for (const line of lines) {
       try {
         const event = JSON.parse(line);
         // You could handle different event types here, e.g. progress, partComplete
@@ -149,7 +169,7 @@ if (options.dryRun) {
             console.log('Rust STDOUT:', line);
         }
       }
-    });
+    }
   });
 
   rustProcess.stderr.on('data', (data) => {
