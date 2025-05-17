@@ -1,0 +1,34 @@
+# Node.js
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+
+# Rust
+rust_pdf_splitter/target/
+rust_pdf_splitter/Cargo.lock
+**/*.rs.bk
+
+# Build output
+bin/
+fixed/
+
+# Test files
+test/temp/
+
+# macOS
+.DS_Store
+
+# Editor directories and files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+logs
+*.log
+
+# Environment
+.env
+.env.local 

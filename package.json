@@ -9,7 +9,9 @@
   "scripts": {
     "start": "node src/cli.js",
     "test": "node --test test/**/*.test.js",
-    "build:rust": "cd rust_splitter && cargo build --release && cd .. && mkdir -p bin && cp rust_splitter/target/release/librust_splitter.a bin/rust_splitter"
+    "test:setup": "node test/generate-test-pdf.js",
+    "test:with-setup": "npm run test:setup && npm test",
+    "build:rust": "cd rust_pdf_splitter && cargo build --release && cd .. && mkdir -p bin && cp rust_pdf_splitter/target/release/rust_pdf_splitter bin/rust_pdf_splitter"
   },
   "keywords": [
     "pdf",
@@ -21,5 +23,7 @@
   "dependencies": {
     "commander": "^12.0.0"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "pdfkit": "^0.14.0"
+  }
 } 

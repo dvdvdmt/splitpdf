@@ -1,0 +1,1 @@
+/Users/dvdvdmt/dev/my-miro-notes/automations/cursor/code-conventions.md

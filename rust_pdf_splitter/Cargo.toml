@@ -1,5 +1,5 @@
 [package]
-name = "rust_splitter"
+name = "rust_pdf_splitter"
 version = "0.1.0"
 edition = "2021"
 
