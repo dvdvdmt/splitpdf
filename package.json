@@ -11,7 +11,8 @@
     "test": "node --test test/**/*.test.js",
     "test:setup": "node test/generate-test-pdf.js",
     "test:with-setup": "npm run test:setup && npm test",
-    "build:rust": "cd rust_pdf_splitter && cargo build --release && cd .. && mkdir -p bin && cp rust_pdf_splitter/target/release/rust_pdf_splitter bin/rust_pdf_splitter"
+    "build": "node build.js",
+    "postinstall": "npm run build"
   },
   "keywords": [
     "pdf",

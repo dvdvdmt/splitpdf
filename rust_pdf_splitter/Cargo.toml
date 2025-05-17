@@ -4,8 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "rust_splitter"
-crate-type = ["cdylib", "staticlib"] # For FFI and static linking
+name = "rust_pdf_splitter"
+path = "src/lib.rs"
+
+[[bin]]
+name = "rust_pdf_splitter"
+path = "src/main.rs"
 
 [dependencies]
 pdfium-render = "0.8.13" # Check for latest version
