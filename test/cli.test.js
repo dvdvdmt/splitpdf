@@ -72,7 +72,7 @@ describe('PDF Splitter CLI', () => {
     }
   });
   
-  it('should show help text when run with --help', async () => {
+  it('shows help text when run with --help', async () => {
     const { code, stdout } = await runCLI(['--help']);
     
     assert.strictEqual(code, 0);
@@ -81,7 +81,7 @@ describe('PDF Splitter CLI', () => {
     assert.ok(stdout.includes('--parts'));
   });
   
-  it('should return error code 2 with invalid arguments', async () => {
+  it('returns error code 2 with invalid arguments', async () => {
     // For this test, we'll use an invalid format for the intro parameter
     const { code } = await runCLI([
       '--file', TEST_PDF_PATH, 
@@ -89,16 +89,16 @@ describe('PDF Splitter CLI', () => {
       '--intro', 'invalid-format'  // This should trigger a validation error
     ]);
     
-    assert.strictEqual(code, 2, 'Should exit with code 2 for invalid intro parameter format');
+    assert.strictEqual(code, 2, 'Exits with code 2 for invalid intro parameter format');
   });
   
-  it('should return error code 3 when file not found', async () => {
+  it('returns error code 3 when file not found', async () => {
     const { code } = await runCLI(['--file', 'nonexistent.pdf', '--parts', '2']);
     assert.strictEqual(code, 3);
   });
   
   // Actual PDF splitting test - requires the test PDF to be generated
-  it('should split a PDF into the specified number of parts', async function() {
+  it('splits a PDF into the specified number of parts', async function() {
     // Skip if test PDF doesn't exist
     if (!await fileExists(TEST_PDF_PATH)) {
       this.skip('Test PDF not found. Run npm run test:setup first.');
@@ -121,17 +121,17 @@ describe('PDF Splitter CLI', () => {
 
 
     
-    assert.strictEqual(code, 0, `CLI should exit with code 0, but got ${code}. Stderr: ${stderr}`);
+    assert.strictEqual(code, 0, `CLI exits with code 0, but got ${code}. Stderr: ${stderr}`);
     
     // Check if output files exist with expected names
     const outputPath1 = path.join(outputDir, `${outputBasename}_part1.pdf`);
     const outputPath2 = path.join(outputDir, `${outputBasename}_part2.pdf`);
     
-    assert.ok(await fileExists(outputPath1), `Output file ${outputPath1} should exist`);
-    assert.ok(await fileExists(outputPath2), `Output file ${outputPath2} should exist`);
+    assert.ok(await fileExists(outputPath1), `Output file ${outputPath1} exists`);
+    assert.ok(await fileExists(outputPath2), `Output file ${outputPath2} exists`);
   });
   
-  it('should run in dry-run mode without creating files', async function() {
+  it('runs in dry-run mode without creating files', async function() {
     // Skip if test PDF doesn't exist
     if (!await fileExists(TEST_PDF_PATH)) {
       this.skip('Test PDF not found. Run npm run test:setup first.');
@@ -162,15 +162,15 @@ describe('PDF Splitter CLI', () => {
     assert.strictEqual(code, 0);
     
     // Check that the output has JSON somewhere in it
-    assert.ok(stdout.includes('"parts":'), 'Dry run output should include parts array');
-    assert.ok(stdout.includes('"index":'), 'Dry run output should include part indexes');
+    assert.ok(stdout.includes('"parts":'), 'Dry run output includes parts array');
+    assert.ok(stdout.includes('"index":'), 'Dry run output includes part indexes');
     
-    // Files should not be created in dry-run mode
-    assert.strictEqual(await fileExists(outputPath1), false, 'Dry run should not create output files');
-    assert.strictEqual(await fileExists(outputPath2), false, 'Dry run should not create output files');
+    // Files are not created in dry-run mode
+    assert.strictEqual(await fileExists(outputPath1), false, 'Dry run does not create output files');
+    assert.strictEqual(await fileExists(outputPath2), false, 'Dry run does not create output files');
   });
   
-  it('should split a PDF with intro pages', async function() {
+  it('splits a PDF with intro pages', async function() {
     // Skip if test PDF doesn't exist
     if (!await fileExists(TEST_PDF_PATH)) {
       this.skip('Test PDF not found. Run npm run test:setup first.');
@@ -192,23 +192,23 @@ describe('PDF Splitter CLI', () => {
     console.log('STDOUT:', stdout);
     if (stderr) console.error('STDERR:', stderr);
     
-    assert.strictEqual(code, 0, `CLI should exit with code 0, but got ${code}. Stderr: ${stderr}`);
+    assert.strictEqual(code, 0, `CLI exits with code 0, but got ${code}. Stderr: ${stderr}`);
     
     // Check if output files exist with expected names
     const outputPath1 = path.join(outputDir, `${outputBasename}_part1.pdf`);
     const outputPath2 = path.join(outputDir, `${outputBasename}_part2.pdf`);
     const outputPath3 = path.join(outputDir, `${outputBasename}_part3.pdf`);
     
-    assert.ok(await fileExists(outputPath1), `Output file ${outputPath1} should exist`);
-    assert.ok(await fileExists(outputPath2), `Output file ${outputPath2} should exist`);
-    assert.ok(await fileExists(outputPath3), `Output file ${outputPath3} should exist`);
+    assert.ok(await fileExists(outputPath1), `Output file ${outputPath1} exists`);
+    assert.ok(await fileExists(outputPath2), `Output file ${outputPath2} exists`);
+    assert.ok(await fileExists(outputPath3), `Output file ${outputPath3} exists`);
     
     // Verify the output contains expected info about intro pages
     assert.ok(
       stdout.includes('intro') || 
       stdout.includes('withIntro') || 
       stdout.includes('--intro-start'),
-      'Output should mention intro pages'
+      'Output mentions intro pages'
     );
   });
 }); 
