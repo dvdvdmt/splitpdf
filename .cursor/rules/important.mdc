@@ -1,0 +1,7 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+[code-conventions.md](mdc:spec/code-conventions.md)
+[project-description.md](mdc:spec/project-description.md)
